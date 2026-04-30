@@ -1,0 +1,397 @@
+---
+
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="icon" href="/favicon.ico" />
+		<meta name="viewport" content="width=device-width" />
+		<meta name="generator" content={Astro.generator} />
+		<title>Six Seven</title>
+		<style>
+			*,
+			*::before,
+			*::after {
+				box-sizing: border-box;
+				margin: 0;
+				padding: 0;
+			}
+
+			body {
+				background: #0d0d1a;
+				color: #fff;
+				font-family: system-ui, sans-serif;
+				min-height: 100dvh;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				padding: 24px 16px;
+				gap: 20px;
+			}
+
+			.title {
+				font-size: 1.4rem;
+				font-weight: 700;
+				letter-spacing: 0.35em;
+				color: #c084fc;
+				text-transform: uppercase;
+			}
+
+			.score-wrap {
+				text-align: center;
+				line-height: 1;
+			}
+
+			.score-label {
+				font-size: 0.7rem;
+				letter-spacing: 0.2em;
+				color: #6b7280;
+				text-transform: uppercase;
+				margin-bottom: 4px;
+			}
+
+			#score-value {
+				font-size: 7rem;
+				font-weight: 900;
+				color: #fff;
+				display: inline-block;
+				transition:
+					color 0.15s,
+					transform 0.15s;
+				line-height: 1;
+			}
+
+			#score-value.pop {
+				color: #4ade80;
+				transform: scale(1.25);
+			}
+
+			#canvas-wrap {
+				border-radius: 16px;
+				overflow: hidden;
+				border: 2px solid #1e1e3f;
+				box-shadow: 0 0 48px rgba(168, 85, 247, 0.12);
+				max-width: min(100vw - 32px, 720px);
+				width: 100%;
+			}
+
+			#canvas {
+				display: block;
+				width: 100%;
+				height: auto;
+			}
+
+			#status {
+				font-size: 0.8rem;
+				color: #6b7280;
+			}
+
+			.hint {
+				font-size: 0.78rem;
+				color: #374151;
+				text-align: center;
+				max-width: 360px;
+				line-height: 1.75;
+			}
+
+			.hint strong {
+				color: #9ca3af;
+			}
+		</style>
+	</head>
+	<body>
+		<p class="title">Six Seven</p>
+
+		<div class="score-wrap">
+			<p class="score-label">Score</p>
+			<span id="score-value">0</span>
+		</div>
+
+		<div id="canvas-wrap">
+			<canvas id="canvas" width="640" height="480"></canvas>
+		</div>
+
+		<p id="status">Initialising…</p>
+
+		<p class="hint">
+			Show <strong>both hands</strong> · move <strong
+				>one hand ↑ up</strong
+			> while the other goes <strong>↓ down</strong> to score a point.
+		</p>
+
+		<video id="video" autoplay playsinline muted style="display:none"
+		></video>
+
+		<script>
+			import {
+				HandLandmarker,
+				FilesetResolver,
+			} from "@mediapipe/tasks-vision";
+
+			/* ── DOM refs ──────────────────────────────────────────── */
+			const video = document.getElementById("video") as HTMLVideoElement;
+			const canvas = document.getElementById(
+				"canvas",
+			) as HTMLCanvasElement;
+			const scoreEl = document.getElementById(
+				"score-value",
+			) as HTMLElement;
+			const statusEl = document.getElementById("status") as HTMLElement;
+			const ctx = canvas.getContext("2d")!;
+
+			/* ── MediaPipe assets ──────────────────────────────────── */
+			const WASM_CDN =
+				"https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
+			const MODEL_URL =
+				"https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+
+			/* ── Hand skeleton connections (MediaPipe standard) ────── */
+			const CONNECTIONS: [number, number][] = [
+				[0, 1],
+				[1, 2],
+				[2, 3],
+				[3, 4],
+				[0, 5],
+				[5, 6],
+				[6, 7],
+				[7, 8],
+				[5, 9],
+				[9, 10],
+				[10, 11],
+				[11, 12],
+				[9, 13],
+				[13, 14],
+				[14, 15],
+				[15, 16],
+				[13, 17],
+				[17, 18],
+				[18, 19],
+				[19, 20],
+				[0, 17],
+			];
+
+			/* ── Tracking config ───────────────────────────────────── */
+			/** Rolling Y-position buffer size (frames) */
+			const HISTORY = 10;
+			/**
+			 * Minimum normalised-coordinate delta (first-2 vs last-2 in buffer)
+			 * to consider the hand definitely moving up or down.
+			 */
+			const THRESHOLD = 0.03;
+
+			/* ── State ─────────────────────────────────────────────── */
+			type Dir = "up" | "down" | "neutral";
+			interface HandState {
+				yHistory: number[];
+				dir: Dir;
+			}
+
+			const hands: Record<string, HandState> = {};
+			let score = 0;
+			let cycleUsed = false; // prevents double-counting one movement cycle
+			let lastVidTime = -1;
+			let hl: HandLandmarker;
+
+			/* ── Tracking helpers ──────────────────────────────────── */
+			function trackHand(id: string, y: number) {
+				if (!hands[id]) hands[id] = { yHistory: [], dir: "neutral" };
+				const h = hands[id];
+				h.yHistory.push(y);
+				if (h.yHistory.length > HISTORY) h.yHistory.shift();
+				if (h.yHistory.length < 4) return;
+
+				const n = h.yHistory.length;
+				// Average of last 2 samples vs first 2 samples
+				const recent = (h.yHistory[n - 1] + h.yHistory[n - 2]) / 2;
+				const older = (h.yHistory[0] + h.yHistory[1]) / 2;
+				const delta = recent - older; // positive → moving DOWN in image coords
+
+				h.dir =
+					delta < -THRESHOLD
+						? "up"
+						: delta > THRESHOLD
+							? "down"
+							: "neutral";
+			}
+
+			/* ── Drawing helpers ───────────────────────────────────── */
+			function drawHand(
+				lms: { x: number; y: number }[],
+				dir: Dir,
+				cw: number,
+				ch: number,
+			) {
+				const color =
+					dir === "up"
+						? "#4ade80"
+						: dir === "down"
+							? "#f87171"
+							: "#a78bfa";
+
+				ctx.save();
+				ctx.strokeStyle = color;
+				ctx.lineWidth = 3;
+				ctx.lineCap = "round";
+				ctx.lineJoin = "round";
+
+				// Skeleton — flip X to match mirrored video
+				for (const [a, b] of CONNECTIONS) {
+					ctx.beginPath();
+					ctx.moveTo((1 - lms[a].x) * cw, lms[a].y * ch);
+					ctx.lineTo((1 - lms[b].x) * cw, lms[b].y * ch);
+					ctx.stroke();
+				}
+
+				// Joint dots
+				ctx.fillStyle = "#ffffff";
+				for (const lm of lms) {
+					ctx.beginPath();
+					ctx.arc((1 - lm.x) * cw, lm.y * ch, 4, 0, Math.PI * 2);
+					ctx.fill();
+				}
+
+				// Direction arrow above wrist
+				const wx = (1 - lms[0].x) * cw;
+				const wy = lms[0].y * ch;
+				ctx.font = "bold 34px sans-serif";
+				ctx.textAlign = "center";
+				ctx.textBaseline = "bottom";
+				ctx.fillStyle = color;
+				ctx.fillText(
+					dir === "up" ? "↑" : dir === "down" ? "↓" : "·",
+					wx,
+					wy - 6,
+				);
+
+				ctx.restore();
+			}
+
+			/* ── Main detection loop ───────────────────────────────── */
+			function loop() {
+				if (
+					video.currentTime !== lastVidTime &&
+					video.readyState >= 2
+				) {
+					lastVidTime = video.currentTime;
+
+					const cw = canvas.width;
+					const ch = canvas.height;
+
+					// Draw mirrored camera feed
+					ctx.save();
+					ctx.scale(-1, 1);
+					ctx.drawImage(video, -cw, 0, cw, ch);
+					ctx.restore();
+
+					const res = hl.detectForVideo(video, performance.now());
+					const seen = new Set<string>();
+
+					for (let i = 0; i < (res.landmarks?.length ?? 0); i++) {
+						const lms = res.landmarks[i];
+						const id =
+							res.handedness[i]?.[0]?.categoryName ?? `h${i}`;
+						seen.add(id);
+						trackHand(id, lms[0].y); // landmark 0 = wrist
+						drawHand(lms, hands[id].dir, cw, ch);
+					}
+
+					// Forget hands that left the frame
+					for (const id of Object.keys(hands)) {
+						if (!seen.has(id)) delete hands[id];
+					}
+
+					// ── Scoring ─────────────────────────────────────────
+					const ids = Object.keys(hands);
+					if (ids.length >= 2) {
+						const d0 = hands[ids[0]].dir;
+						const d1 = hands[ids[1]].dir;
+						const opposite =
+							(d0 === "up" && d1 === "down") ||
+							(d0 === "down" && d1 === "up");
+
+						if (opposite && !cycleUsed) {
+							score++;
+							scoreEl.textContent = String(score);
+							scoreEl.classList.add("pop");
+							setTimeout(
+								() => scoreEl.classList.remove("pop"),
+								300,
+							);
+							cycleUsed = true;
+						}
+						if (!opposite) cycleUsed = false;
+					} else {
+						cycleUsed = false;
+					}
+				}
+
+				requestAnimationFrame(loop);
+			}
+
+			/* ── Init ──────────────────────────────────────────────── */
+			async function main() {
+				statusEl.textContent = "Loading WASM…";
+				const fs = await FilesetResolver.forVisionTasks(WASM_CDN);
+
+				statusEl.textContent = "Loading model…";
+				try {
+					hl = await HandLandmarker.createFromOptions(fs, {
+						baseOptions: {
+							modelAssetPath: MODEL_URL,
+							delegate: "GPU",
+						},
+						runningMode: "VIDEO",
+						numHands: 2,
+					});
+				} catch {
+					// GPU unavailable — fall back to CPU
+					hl = await HandLandmarker.createFromOptions(fs, {
+						baseOptions: {
+							modelAssetPath: MODEL_URL,
+							delegate: "CPU",
+						},
+						runningMode: "VIDEO",
+						numHands: 2,
+					});
+				}
+
+				statusEl.textContent = "Starting camera…";
+				if (!navigator.mediaDevices?.getUserMedia) {
+					throw new Error(
+						"Camera API unavailable. This page must be served over HTTPS (or localhost). " +
+							"If testing on a phone, use a tunnel like `npx localtunnel` or `npx ngrok http <port>` " +
+							"to get an HTTPS URL.",
+					);
+				}
+				const stream = await navigator.mediaDevices.getUserMedia({
+					video: {
+						facingMode: "user",
+						width: { ideal: 1280 },
+						height: { ideal: 720 },
+					},
+				});
+				video.srcObject = stream;
+
+				await new Promise<void>((resolve) => {
+					video.addEventListener("loadedmetadata", () => resolve(), {
+						once: true,
+					});
+				});
+				await video.play();
+
+				canvas.width = video.videoWidth || 640;
+				canvas.height = video.videoHeight || 480;
+
+				statusEl.textContent = "Ready — show both hands!";
+				requestAnimationFrame(loop);
+			}
+
+			main().catch((err) => {
+				statusEl.textContent = `Error: ${(err as Error).message ?? err}`;
+				console.error(err);
+			});
+		</script>
+	</body>
+</html>
