@@ -407,15 +407,20 @@
 			];
 
 			/* ── Config ────────────────────────────────────────── */
-			const HISTORY = 10;
-			const THRESHOLD = 0.03;
+			/** Fewer frames = faster direction detection for quick moves */
+			const HISTORY = 5;
+			const THRESHOLD = 0.025;
 			const GAME_DURATION = 60;
+			/** Score if both opposite directions happened within this window (ms) */
+			const DIR_WINDOW_MS = 450;
 
 			/* ── State ─────────────────────────────────────────── */
 			type Dir = "up" | "down" | "neutral";
 			interface HandState {
 				yHistory: number[];
 				dir: Dir;
+				lastUp: number; // performance.now() of last "up" frame
+				lastDown: number; // performance.now() of last "down" frame
 			}
 
 			let hands: Record<string, HandState> = {};
@@ -430,22 +435,29 @@
 			let gameActive = false;
 
 			/* ── Tracking ──────────────────────────────────────── */
-			function trackHand(id: string, y: number) {
-				if (!hands[id]) hands[id] = { yHistory: [], dir: "neutral" };
+			function trackHand(id: string, y: number, now: number) {
+				if (!hands[id])
+					hands[id] = {
+						yHistory: [],
+						dir: "neutral",
+						lastUp: 0,
+						lastDown: 0,
+					};
 				const h = hands[id];
 				h.yHistory.push(y);
 				if (h.yHistory.length > HISTORY) h.yHistory.shift();
-				if (h.yHistory.length < 4) return;
+				if (h.yHistory.length < 2) return;
 				const n = h.yHistory.length;
-				const recent = (h.yHistory[n - 1] + h.yHistory[n - 2]) / 2;
-				const older = (h.yHistory[0] + h.yHistory[1]) / 2;
-				const delta = recent - older;
+				// Compare newest vs oldest in the short buffer
+				const delta = h.yHistory[n - 1] - h.yHistory[0];
 				h.dir =
 					delta < -THRESHOLD
 						? "up"
 						: delta > THRESHOLD
 							? "down"
 							: "neutral";
+				if (h.dir === "up") h.lastUp = now;
+				if (h.dir === "down") h.lastDown = now;
 			}
 
 			/* ── Drawing ───────────────────────────────────────── */
@@ -513,7 +525,7 @@
 						const id =
 							res.handedness[i]?.[0]?.categoryName ?? `h${i}`;
 						seen.add(id);
-						trackHand(id, lms[0].y);
+						trackHand(id, lms[0].y, performance.now());
 						drawHand(lms, hands[id].dir, cw, ch);
 					}
 					for (const id of Object.keys(hands)) {
@@ -521,11 +533,19 @@
 					}
 					const ids = Object.keys(hands);
 					if (ids.length >= 2) {
-						const d0 = hands[ids[0]].dir;
-						const d1 = hands[ids[1]].dir;
-						const opposite =
-							(d0 === "up" && d1 === "down") ||
-							(d0 === "down" && d1 === "up");
+						const now = performance.now();
+						const h0 = hands[ids[0]];
+						const h1 = hands[ids[1]];
+						// Score if both opposite directions happened within the window
+						const h0up = now - h0.lastUp < DIR_WINDOW_MS;
+						const h0down = now - h0.lastDown < DIR_WINDOW_MS;
+						const h1up = now - h1.lastUp < DIR_WINDOW_MS;
+						const h1down = now - h1.lastDown < DIR_WINDOW_MS;
+						const opposite = (h0up && h1down) || (h0down && h1up);
+						// Reset once current real-time dirs are no longer opposite
+						const currentOpposite =
+							(h0.dir === "up" && h1.dir === "down") ||
+							(h0.dir === "down" && h1.dir === "up");
 						if (opposite && !cycleUsed) {
 							score++;
 							scoreEl.textContent = String(score);
@@ -536,7 +556,7 @@
 							);
 							cycleUsed = true;
 						}
-						if (!opposite) cycleUsed = false;
+						if (!currentOpposite) cycleUsed = false;
 					} else {
 						cycleUsed = false;
 					}
