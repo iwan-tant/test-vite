@@ -303,7 +303,7 @@
 				>, other <strong>↓ down</strong> = +1 point · 60 seconds
 			</p>
 			<p>
-				<strong>v0.0.2</strong>
+				<strong>v0.0.3</strong>
 			</p>
 		</div>
 
@@ -411,11 +411,13 @@
 
 			/* ── Config ────────────────────────────────────────── */
 			/** Fewer frames = faster direction detection for quick moves */
-			const HISTORY = 5;
-			const THRESHOLD = 0.025;
+			const HISTORY = 3;
+			const THRESHOLD = 0.02;
 			const GAME_DURATION = 60;
 			/** Score if both opposite directions happened within this window (ms) */
-			const DIR_WINDOW_MS = 450;
+			const DIR_WINDOW_MS = 550;
+			/** Keep hand state alive this long after last detection (handles missed frames) */
+			const HAND_GRACE_MS = 150;
 
 			/* ── State ─────────────────────────────────────────── */
 			type Dir = "up" | "down" | "neutral";
@@ -424,6 +426,7 @@
 				dir: Dir;
 				lastUp: number; // performance.now() of last "up" frame
 				lastDown: number; // performance.now() of last "down" frame
+				lastSeen: number; // performance.now() of last detected frame
 			}
 
 			let hands: Record<string, HandState> = {};
@@ -445,14 +448,21 @@
 						dir: "neutral",
 						lastUp: 0,
 						lastDown: 0,
+						lastSeen: now,
 					};
+				hands[id].lastSeen = now;
 				const h = hands[id];
 				h.yHistory.push(y);
 				if (h.yHistory.length > HISTORY) h.yHistory.shift();
 				if (h.yHistory.length < 2) return;
 				const n = h.yHistory.length;
-				// Compare newest vs oldest in the short buffer
-				const delta = h.yHistory[n - 1] - h.yHistory[0];
+				// Instantaneous velocity (last 2 frames) catches fast flicks
+				const instant = h.yHistory[n - 1] - h.yHistory[n - 2];
+				// Short-term trend normalised to per-frame magnitude
+				const trend = (h.yHistory[n - 1] - h.yHistory[0]) / (n - 1);
+				// Use whichever signal is stronger
+				const delta =
+					Math.abs(instant) >= Math.abs(trend) ? instant : trend;
 				h.dir =
 					delta < -THRESHOLD
 						? "up"
@@ -531,8 +541,13 @@
 						trackHand(id, lms[0].y, performance.now());
 						drawHand(lms, hands[id].dir, cw, ch);
 					}
+					const now2 = performance.now();
 					for (const id of Object.keys(hands)) {
-						if (!seen.has(id)) delete hands[id];
+						if (
+							!seen.has(id) &&
+							now2 - hands[id].lastSeen > HAND_GRACE_MS
+						)
+							delete hands[id];
 					}
 					const ids = Object.keys(hands);
 					if (ids.length >= 2) {
@@ -697,6 +712,9 @@
 						},
 						runningMode: "VIDEO",
 						numHands: 2,
+						minHandDetectionConfidence: 0.4,
+						minHandPresenceConfidence: 0.4,
+						minTrackingConfidence: 0.3,
 					});
 				} catch {
 					hl = await HandLandmarker.createFromOptions(fs, {
@@ -706,6 +724,9 @@
 						},
 						runningMode: "VIDEO",
 						numHands: 2,
+						minHandDetectionConfidence: 0.4,
+						minHandPresenceConfidence: 0.4,
+						minTrackingConfidence: 0.3,
 					});
 				}
 				showScreen("screen-ready");
