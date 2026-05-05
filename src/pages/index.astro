@@ -303,7 +303,7 @@
 				>, other <strong>↓ down</strong> = +1 point · 60 seconds
 			</p>
 			<p>
-				<strong>v0.0.4</strong>
+				<strong>v0.0.5</strong>
 			</p>
 		</div>
 
@@ -714,7 +714,7 @@
 						numHands: 2,
 						minHandDetectionConfidence: 0.4,
 						minHandPresenceConfidence: 0.4,
-						minTrackingConfidence: 0.0,
+						minTrackingConfidence: 0.1,
 					});
 				} catch {
 					hl = await HandLandmarker.createFromOptions(fs, {
