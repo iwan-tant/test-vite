@@ -415,7 +415,7 @@
 			const THRESHOLD = 0.02;
 			const GAME_DURATION = 60;
 			/** Score if both opposite directions happened within this window (ms) */
-			const DIR_WINDOW_MS = 550;
+			const DIR_WINDOW_MS = 150;
 			/** Keep hand state alive this long after last detection (handles missed frames) */
 			const HAND_GRACE_MS = 150;
 
@@ -714,7 +714,7 @@
 						numHands: 2,
 						minHandDetectionConfidence: 0.4,
 						minHandPresenceConfidence: 0.4,
-						minTrackingConfidence: 0.3,
+						minTrackingConfidence: 0.0,
 					});
 				} catch {
 					hl = await HandLandmarker.createFromOptions(fs, {
