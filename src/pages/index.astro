@@ -303,7 +303,7 @@
 				>, other <strong>↓ down</strong> = +1 point · 60 seconds
 			</p>
 			<p>
-				<strong>v0.0.5</strong>
+				<strong>v0.0.6</strong>
 			</p>
 		</div>
 
@@ -712,9 +712,9 @@
 						},
 						runningMode: "VIDEO",
 						numHands: 2,
-						minHandDetectionConfidence: 0.4,
-						minHandPresenceConfidence: 0.4,
-						minTrackingConfidence: 0.1,
+						minHandDetectionConfidence: 0.2,
+						minHandPresenceConfidence: 0.2,
+						minTrackingConfidence: 0.01,
 					});
 				} catch {
 					hl = await HandLandmarker.createFromOptions(fs, {
@@ -724,9 +724,9 @@
 						},
 						runningMode: "VIDEO",
 						numHands: 2,
-						minHandDetectionConfidence: 0.4,
-						minHandPresenceConfidence: 0.4,
-						minTrackingConfidence: 0.3,
+						minHandDetectionConfidence: 0.2,
+						minHandPresenceConfidence: 0.2,
+						minTrackingConfidence: 0.01,
 					});
 				}
 				showScreen("screen-ready");
