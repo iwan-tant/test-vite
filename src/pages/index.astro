@@ -303,7 +303,7 @@
 				>, other <strong>↓ down</strong> = +1 point · 60 seconds
 			</p>
 			<p>
-				<strong>v0.0.8</strong>
+				<strong>v0.0.9</strong>
 			</p>
 		</div>
 
@@ -415,9 +415,11 @@
 			const THRESHOLD = 0.02;
 			const GAME_DURATION = 60;
 			/** Score if both opposite directions happened within this window (ms) */
-			const DIR_WINDOW_MS = 150;
+			const DIR_WINDOW_MS = 400;
 			/** Keep hand state alive this long after last detection (handles missed frames) */
-			const HAND_GRACE_MS = 150;
+			const HAND_GRACE_MS = 300;
+			/** Minimum ms between consecutive scores (prevents double-counting) */
+			const SCORE_COOLDOWN_MS = 350;
 
 			/* ── State ─────────────────────────────────────────── */
 			type Dir = "up" | "down" | "neutral";
@@ -431,7 +433,7 @@
 
 			let hands: Record<string, HandState> = {};
 			let score = 0;
-			let cycleUsed = false;
+			let lastScoreTime = 0;
 			let lastVidTime = -1;
 			let hl: HandLandmarker;
 			let rafId = 0;
@@ -560,23 +562,21 @@
 						const h1up = now - h1.lastUp < DIR_WINDOW_MS;
 						const h1down = now - h1.lastDown < DIR_WINDOW_MS;
 						const opposite = (h0up && h1down) || (h0down && h1up);
-						// Reset once current real-time dirs are no longer opposite
-						const currentOpposite =
-							(h0.dir === "up" && h1.dir === "down") ||
-							(h0.dir === "down" && h1.dir === "up");
-						if (opposite && !cycleUsed) {
+						// Use a time-based cooldown instead of a boolean flag so that
+						// fast gestures completing in 1-2 frames are never skipped.
+						if (
+							opposite &&
+							now - lastScoreTime > SCORE_COOLDOWN_MS
+						) {
 							score++;
+							lastScoreTime = now;
 							scoreEl.textContent = String(score);
 							scoreEl.classList.add("pop");
 							setTimeout(
 								() => scoreEl.classList.remove("pop"),
 								300,
 							);
-							cycleUsed = true;
 						}
-						if (!currentOpposite) cycleUsed = false;
-					} else {
-						cycleUsed = false;
 					}
 				}
 				rafId = requestAnimationFrame(loop);
@@ -603,7 +603,7 @@
 			async function startGame(stream: MediaStream) {
 				// Reset state
 				score = 0;
-				cycleUsed = false;
+				lastScoreTime = 0;
 				lastVidTime = -1;
 				hands = {};
 				timeLeft = GAME_DURATION;
@@ -712,8 +712,8 @@
 						},
 						runningMode: "VIDEO",
 						numHands: 2,
-						minHandDetectionConfidence: 0.4,
-						minHandPresenceConfidence: 0.4,
+						minHandDetectionConfidence: 0.3,
+						minHandPresenceConfidence: 0.3,
 						minTrackingConfidence: 0.3,
 					});
 				} catch {
@@ -724,8 +724,8 @@
 						},
 						runningMode: "VIDEO",
 						numHands: 2,
-						minHandDetectionConfidence: 0.4,
-						minHandPresenceConfidence: 0.4,
+						minHandDetectionConfidence: 0.3,
+						minHandPresenceConfidence: 0.3,
 						minTrackingConfidence: 0.3,
 					});
 				}
