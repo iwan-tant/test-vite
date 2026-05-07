@@ -303,7 +303,7 @@
 				>, other <strong>↓ down</strong> = +1 point · 60 seconds
 			</p>
 			<p>
-				<strong>v0.0.9</strong>
+				<strong>v0.0.10</strong>
 			</p>
 		</div>
 
@@ -481,6 +481,12 @@
 				dir: Dir,
 				cw: number,
 				ch: number,
+				bbox?: {
+					originX: number;
+					originY: number;
+					width: number;
+					height: number;
+				},
 			) {
 				const color =
 					dir === "up"
@@ -516,6 +522,18 @@
 					wx,
 					wy - 6,
 				);
+				// Draw bounding box when available (mirrors x-axis like landmarks)
+				if (bbox) {
+					const bx = (1 - (bbox.originX + bbox.width)) * cw;
+					const by = bbox.originY * ch;
+					const bw = bbox.width * cw;
+					const bh = bbox.height * ch;
+					ctx.globalAlpha = 0.35;
+					ctx.lineWidth = 1.5;
+					ctx.setLineDash([5, 4]);
+					ctx.strokeStyle = color;
+					ctx.strokeRect(bx, by, bw, bh);
+				}
 				ctx.restore();
 			}
 
@@ -540,8 +558,23 @@
 						const id =
 							res.handedness[i]?.[0]?.categoryName ?? `h${i}`;
 						seen.add(id);
-						trackHand(id, lms[0].y, performance.now());
-						drawHand(lms, hands[id].dir, cw, ch);
+						// Bounding box center Y is the most blur-resistant signal:
+						// it aggregates the whole hand region and survives when
+						// individual landmarks become noisy during fast motion.
+						// Fall back to landmark 9 (palm center) → landmark 0 (wrist).
+						const bbox = (res as any).handBoundingBoxes?.[i] as
+							| {
+									originX: number;
+									originY: number;
+									width: number;
+									height: number;
+							  }
+							| undefined;
+						const trackY = bbox
+							? bbox.originY + bbox.height / 2
+							: (lms[9]?.y ?? lms[0].y);
+						trackHand(id, trackY, performance.now());
+						drawHand(lms, hands[id].dir, cw, ch, bbox);
 					}
 					const now2 = performance.now();
 					for (const id of Object.keys(hands)) {
