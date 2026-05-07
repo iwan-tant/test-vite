@@ -303,7 +303,7 @@
 				>, other <strong>↓ down</strong> = +1 point · 60 seconds
 			</p>
 			<p>
-				<strong>v0.0.10</strong>
+				<strong>v0.0.11</strong>
 			</p>
 		</div>
 
@@ -542,7 +542,7 @@
 						seen.add(id);
 						// Wrist (landmark 0) — simplest and most reliable single point.
 						trackHand(id, lms[0].y, performance.now());
-						drawHand(lms, hands[id].dir, cw, ch);
+						// drawHand(lms, hands[id].dir, cw, ch);
 					}
 					const now2 = performance.now();
 					for (const id of Object.keys(hands)) {
