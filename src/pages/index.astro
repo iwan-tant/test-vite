@@ -305,7 +305,7 @@
 				<strong>↓ turun</strong> = +1 point
 			</p>
 			<p>
-				<strong>v0.0.16</strong>
+				<strong>v0.0.17</strong>
 			</p>
 		</div>
 
@@ -432,6 +432,10 @@
 			 *  MediaPipe extrapolates off-screen joints; raise this (e.g. 0.6–0.8)
 			 *  to reject guessed positions when the wrist leaves the camera frame. */
 			const MIN_WRIST_VISIBILITY = 0.6;
+			/** Looser visibility threshold used when a hand is already being tracked.
+			 *  Fast wrist movement causes motion blur and drops visibility to ~0.3–0.5;
+			 *  this lets those frames continue the tracking streak without false positives. */
+			const MIN_WRIST_VISIBILITY_RETRACK = 0.35;
 			/** Max Euclidean distance (normalised 0–1) between wrist and shoulder.
 			 *  A human arm span is ~0.5–0.6 in normalised coords; anything larger
 			 *  is a misdetection (e.g. background object mapped onto a joint). */
@@ -582,20 +586,22 @@
 						for (const side of WRIST_IDS) {
 							const wristLm = lms[WRIST_IDX[side]];
 							const shoulderLm = lms[SHOULDER_IDX[side]];
-							// Require both landmarks to be visible and within a
-							// plausible arm-reach distance from the shoulder.
-							// This rejects misdetections where a background object
-							// or another body part gets mapped onto a wrist/shoulder.
+							// Use strict threshold for fresh detection, lenient for
+							// already-tracked hands (fast movement causes motion blur).
+							const alreadyTracked =
+								!!hands[side] &&
+								now2 - hands[side].lastSeen < HAND_GRACE_MS;
+							const visMin = alreadyTracked
+								? MIN_WRIST_VISIBILITY_RETRACK
+								: MIN_WRIST_VISIBILITY;
 							const dx = wristLm?.x - shoulderLm?.x;
 							const dy = wristLm?.y - shoulderLm?.y;
 							const armDist = Math.hypot(dx, dy);
 							if (
 								wristLm &&
-								(wristLm.visibility ?? 1) >=
-									MIN_WRIST_VISIBILITY &&
+								(wristLm.visibility ?? 1) >= visMin &&
 								shoulderLm &&
-								(shoulderLm.visibility ?? 1) >=
-									MIN_WRIST_VISIBILITY &&
+								(shoulderLm.visibility ?? 1) >= visMin &&
 								armDist <= MAX_ARM_REACH
 							) {
 								seenSides.add(side);
