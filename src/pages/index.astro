@@ -411,6 +411,8 @@
 			/** Pose landmark indices for left & right wrists */
 			const WRIST_IDS = ["left", "right"] as const;
 			const WRIST_IDX = { left: 15, right: 16 } as const;
+			/** Shoulder landmarks used as reference anchor to cancel body movement */
+			const SHOULDER_IDX = { left: 11, right: 12 } as const;
 
 			/* ── Config ────────────────────────────────────────── */
 			/** Fewer frames = faster direction detection for quick moves */
@@ -570,11 +572,20 @@
 					const seenSides = new Set<string>();
 					if (lms) {
 						for (const side of WRIST_IDS) {
-							const idx = WRIST_IDX[side];
-							const lm = lms[idx];
-							if (lm && (lm.visibility ?? 1) >= 0.3) {
+							const wristLm = lms[WRIST_IDX[side]];
+							const shoulderLm = lms[SHOULDER_IDX[side]];
+							// Require both wrist AND shoulder to be visible so we
+							// can compute a body-relative y (cancels torso movement).
+							if (
+								wristLm &&
+								(wristLm.visibility ?? 1) >= 0.3 &&
+								shoulderLm &&
+								(shoulderLm.visibility ?? 1) >= 0.3
+							) {
 								seenSides.add(side);
-								trackHand(side, lm.y, now2);
+								// Negative = wrist above shoulder, positive = wrist below.
+								// Using this relative value means leaning/jumping won't score.
+								trackHand(side, wristLm.y - shoulderLm.y, now2);
 							}
 						}
 						const wristDirs: Record<string, Dir> = {};
