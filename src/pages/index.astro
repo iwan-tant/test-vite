@@ -45,11 +45,13 @@
 				flex-direction: column;
 				align-items: center;
 				justify-content: center;
-				padding: 24px 16px env(safe-area-inset-bottom, 16px);
-				gap: 16px;
+				padding: clamp(12px, 3dvh, 24px) 16px
+					env(safe-area-inset-bottom, 16px);
+				gap: clamp(8px, 2dvh, 16px);
 				opacity: 0;
 				pointer-events: none;
 				transition: opacity 0.3s;
+				overflow: hidden;
 			}
 
 			.screen.active {
@@ -91,13 +93,13 @@
 			.btn-start {
 				background: linear-gradient(135deg, #7c3aed, #c084fc);
 				color: #fff;
-				font-size: clamp(1.2rem, 5vw, 1.7rem);
+				font-size: clamp(1rem, min(5vw, 5dvh), 1.7rem);
 				font-weight: 700;
 				letter-spacing: 0.15em;
 				text-transform: uppercase;
 				border: none;
 				border-radius: 20px;
-				padding: 18px 64px;
+				padding: clamp(10px, 3dvh, 18px) clamp(28px, 8vw, 64px);
 				cursor: pointer;
 				box-shadow: 0 0 48px rgba(192, 132, 252, 0.35);
 				transition:
@@ -124,7 +126,7 @@
 
 			/* ── Countdown ───────────────────────────────────── */
 			#countdown-number {
-				font-size: clamp(7rem, 35vw, 20rem);
+				font-size: clamp(4rem, min(30vw, 45dvh), 17rem);
 				font-weight: 900;
 				line-height: 1;
 				color: #fff;
@@ -184,7 +186,7 @@
 			}
 
 			.hud-value {
-				font-size: clamp(2.2rem, 11vw, 5.5rem);
+				font-size: clamp(1.6rem, min(9vw, 10dvh), 4.5rem);
 				font-weight: 900;
 				line-height: 1;
 			}
@@ -256,7 +258,7 @@
 			}
 
 			.result-score {
-				font-size: clamp(6rem, 30vw, 14rem);
+				font-size: clamp(3rem, min(25vw, 22dvh), 11rem);
 				font-weight: 900;
 				line-height: 1;
 				color: #4ade80;
