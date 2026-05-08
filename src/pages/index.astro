@@ -305,7 +305,7 @@
 				<strong>↓ turun</strong> = +1 point
 			</p>
 			<p>
-				<strong>v0.0.13</strong>
+				<strong>v0.0.14</strong>
 			</p>
 		</div>
 
@@ -415,14 +415,19 @@
 			/* ── Config ────────────────────────────────────────── */
 			/** Fewer frames = faster direction detection for quick moves */
 			const HISTORY = 3;
-			const THRESHOLD = 0.02;
+			/** Min y-delta per frame (normalised 0–1) to register as wrist movement.
+			 *  Increase (e.g. 0.04–0.06) to require a bigger/faster wrist flick.
+			 *  Decrease (e.g. 0.01) to detect very subtle movement. */
+			const THRESHOLD = 0.05;
 			const GAME_DURATION = 20;
-			/** Score if both opposite directions happened within this window (ms) */
+			/** Both wrists must have moved in opposite directions within this window (ms).
+			 *  Decrease (e.g. 200) to require more simultaneous movement.
+			 *  Increase (e.g. 600) to allow more lag between the two hands. */
 			const DIR_WINDOW_MS = 400;
 			/** Keep hand state alive this long after last detection (handles missed frames) */
 			const HAND_GRACE_MS = 300;
-			/** Minimum ms between consecutive scores (prevents double-counting) */
-			const SCORE_COOLDOWN_MS = 180;
+			/** Minimum ms between consecutive scores (prevents rapid double-counting) */
+			const SCORE_COOLDOWN_MS = 250;
 
 			/* ── State ─────────────────────────────────────────── */
 			type Dir = "up" | "down" | "neutral";
@@ -601,6 +606,12 @@
 						) {
 							score++;
 							lastScoreTime = now;
+							// Clear direction timestamps so the same movement can't
+							// score again — new wrist gestures required for next point.
+							h0.lastUp = 0;
+							h0.lastDown = 0;
+							h1.lastUp = 0;
+							h1.lastDown = 0;
 							scoreEl.textContent = String(score);
 							scoreEl.classList.add("pop");
 							setTimeout(
