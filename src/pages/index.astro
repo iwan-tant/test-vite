@@ -305,7 +305,7 @@
 				<strong>↓ turun</strong> = +1 point
 			</p>
 			<p>
-				<strong>v0.0.14</strong>
+				<strong>v0.0.15</strong>
 			</p>
 		</div>
 
@@ -428,6 +428,10 @@
 			const DIR_WINDOW_MS = 400;
 			/** Keep hand state alive this long after last detection (handles missed frames) */
 			const HAND_GRACE_MS = 300;
+			/** Minimum visibility score (0–1) to treat a landmark as actually seen.
+			 *  MediaPipe extrapolates off-screen joints; raise this (e.g. 0.6–0.8)
+			 *  to reject guessed positions when the wrist leaves the camera frame. */
+			const MIN_WRIST_VISIBILITY = 0.6;
 			/** Minimum ms between consecutive scores (prevents rapid double-counting) */
 			const SCORE_COOLDOWN_MS = 250;
 
@@ -574,13 +578,16 @@
 						for (const side of WRIST_IDS) {
 							const wristLm = lms[WRIST_IDX[side]];
 							const shoulderLm = lms[SHOULDER_IDX[side]];
-							// Require both wrist AND shoulder to be visible so we
-							// can compute a body-relative y (cancels torso movement).
+							// Require both wrist AND shoulder to meet the visibility
+							// threshold. MediaPipe extrapolates off-screen joints so
+							// a higher threshold is needed to reject guessed positions.
 							if (
 								wristLm &&
-								(wristLm.visibility ?? 1) >= 0.3 &&
+								(wristLm.visibility ?? 1) >=
+									MIN_WRIST_VISIBILITY &&
 								shoulderLm &&
-								(shoulderLm.visibility ?? 1) >= 0.3
+								(shoulderLm.visibility ?? 1) >=
+									MIN_WRIST_VISIBILITY
 							) {
 								seenSides.add(side);
 								// Negative = wrist above shoulder, positive = wrist below.
@@ -594,11 +601,15 @@
 						drawPose(lms, wristDirs, cw, ch);
 					}
 					for (const id of Object.keys(hands)) {
-						if (
-							!seenSides.has(id) &&
-							now2 - hands[id].lastSeen > HAND_GRACE_MS
-						)
-							delete hands[id];
+						if (!seenSides.has(id)) {
+							// Wrist not visible this frame — immediately discard direction
+							// so the stale timestamp can't pair with the other hand and score.
+							hands[id].lastUp = 0;
+							hands[id].lastDown = 0;
+							hands[id].dir = "neutral";
+							if (now2 - hands[id].lastSeen > HAND_GRACE_MS)
+								delete hands[id];
+						}
 					}
 					const ids = Object.keys(hands);
 					if (ids.length >= 2) {
