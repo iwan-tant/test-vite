@@ -305,7 +305,7 @@
 				<strong>↓ turun</strong> = +1 point
 			</p>
 			<p>
-				<strong>v0.0.15</strong>
+				<strong>v0.0.16</strong>
 			</p>
 		</div>
 
@@ -432,6 +432,10 @@
 			 *  MediaPipe extrapolates off-screen joints; raise this (e.g. 0.6–0.8)
 			 *  to reject guessed positions when the wrist leaves the camera frame. */
 			const MIN_WRIST_VISIBILITY = 0.6;
+			/** Max Euclidean distance (normalised 0–1) between wrist and shoulder.
+			 *  A human arm span is ~0.5–0.6 in normalised coords; anything larger
+			 *  is a misdetection (e.g. background object mapped onto a joint). */
+			const MAX_ARM_REACH = 0.65;
 			/** Minimum ms between consecutive scores (prevents rapid double-counting) */
 			const SCORE_COOLDOWN_MS = 250;
 
@@ -578,21 +582,26 @@
 						for (const side of WRIST_IDS) {
 							const wristLm = lms[WRIST_IDX[side]];
 							const shoulderLm = lms[SHOULDER_IDX[side]];
-							// Require both wrist AND shoulder to meet the visibility
-							// threshold. MediaPipe extrapolates off-screen joints so
-							// a higher threshold is needed to reject guessed positions.
+							// Require both landmarks to be visible and within a
+							// plausible arm-reach distance from the shoulder.
+							// This rejects misdetections where a background object
+							// or another body part gets mapped onto a wrist/shoulder.
+							const dx = wristLm?.x - shoulderLm?.x;
+							const dy = wristLm?.y - shoulderLm?.y;
+							const armDist = Math.hypot(dx, dy);
 							if (
 								wristLm &&
 								(wristLm.visibility ?? 1) >=
 									MIN_WRIST_VISIBILITY &&
 								shoulderLm &&
 								(shoulderLm.visibility ?? 1) >=
-									MIN_WRIST_VISIBILITY
+									MIN_WRIST_VISIBILITY &&
+								armDist <= MAX_ARM_REACH
 							) {
 								seenSides.add(side);
 								// Negative = wrist above shoulder, positive = wrist below.
 								// Using this relative value means leaning/jumping won't score.
-								trackHand(side, wristLm.y - shoulderLm.y, now2);
+								trackHand(side, dy, now2);
 							}
 						}
 						const wristDirs: Record<string, Dir> = {};
@@ -776,9 +785,9 @@
 						},
 						runningMode: "VIDEO",
 						numPoses: 1,
-						minPoseDetectionConfidence: 0.3,
-						minPosePresenceConfidence: 0.3,
-						minTrackingConfidence: 0.3,
+						minPoseDetectionConfidence: 0.6,
+						minPosePresenceConfidence: 0.6,
+						minTrackingConfidence: 0.6,
 					});
 				} catch {
 					pl = await PoseLandmarker.createFromOptions(fs, {
@@ -788,9 +797,9 @@
 						},
 						runningMode: "VIDEO",
 						numPoses: 1,
-						minPoseDetectionConfidence: 0.3,
-						minPosePresenceConfidence: 0.3,
-						minTrackingConfidence: 0.3,
+						minPoseDetectionConfidence: 0.6,
+						minPosePresenceConfidence: 0.6,
+						minTrackingConfidence: 0.6,
 					});
 				}
 				showScreen("screen-ready");
