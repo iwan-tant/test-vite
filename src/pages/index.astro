@@ -299,11 +299,11 @@
 			<p class="game-title">Six Seven</p>
 			<button id="btn-start" class="btn-start">Start</button>
 			<p class="hint-ready">
-				Raise one <strong>wrist ↑ up</strong>, lower the other
-				<strong>↓ down</strong> = +1 point · 60 seconds
+				Angkat <strong>tangan ↑ naik</strong>, turunkan yang lain
+				<strong>↓ turun</strong> = +1 point
 			</p>
 			<p>
-				<strong>v0.0.12</strong>
+				<strong>v0.0.13</strong>
 			</p>
 		</div>
 
@@ -316,7 +316,7 @@
 		<div id="screen-game" class="screen">
 			<div class="hud">
 				<div class="hud-block">
-					<p class="hud-label">Time</p>
+					<p class="hud-label">Waktu</p>
 					<span id="timer-value" class="hud-value">60</span>
 				</div>
 				<div class="hud-block">
@@ -330,16 +330,16 @@
 			</div>
 
 			<p class="hint-game">
-				↑↓ opposite wrists simultaneously = +1 point
+				↑↓ tangan berlawanan secara bersamaan = +1 point
 			</p>
 		</div>
 
 		<!-- Result screen -->
 		<div id="screen-result" class="screen">
-			<p class="result-label">Your Score</p>
+			<p class="result-label">Score Anda</p>
 			<p id="result-score" class="result-score">0</p>
-			<p class="result-sub">in 60 seconds</p>
-			<button id="btn-again" class="btn-again">Play Again</button>
+			<p class="result-sub">dalam 20 detik</p>
+			<button id="btn-again" class="btn-again">Main Lagi</button>
 		</div>
 
 		<video id="video" autoplay playsinline muted style="display:none"
@@ -414,13 +414,13 @@
 			/** Fewer frames = faster direction detection for quick moves */
 			const HISTORY = 3;
 			const THRESHOLD = 0.02;
-			const GAME_DURATION = 60;
+			const GAME_DURATION = 20;
 			/** Score if both opposite directions happened within this window (ms) */
 			const DIR_WINDOW_MS = 400;
 			/** Keep hand state alive this long after last detection (handles missed frames) */
 			const HAND_GRACE_MS = 300;
 			/** Minimum ms between consecutive scores (prevents double-counting) */
-			const SCORE_COOLDOWN_MS = 350;
+			const SCORE_COOLDOWN_MS = 180;
 
 			/* ── State ─────────────────────────────────────────── */
 			type Dir = "up" | "down" | "neutral";
