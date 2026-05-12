@@ -195,6 +195,34 @@
 				gap: 6px;
 			}
 
+			#game-countdown-overlay {
+				position: absolute;
+				inset: 0;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				background: rgba(0, 0, 0, 0.55);
+				z-index: 10;
+				opacity: 0;
+				pointer-events: none;
+				transition: opacity 0.2s;
+			}
+
+			#game-countdown-overlay.visible {
+				opacity: 1;
+			}
+
+			#game-countdown-number {
+				font-size: clamp(4rem, min(30vw, 45dvh), 17rem);
+				font-weight: 900;
+				line-height: 1;
+				color: #fff;
+			}
+
+			#game-countdown-number.anim {
+				animation: countPulse 0.9s ease-in-out forwards;
+			}
+
 			.hud {
 				display: flex;
 				width: 100%;
@@ -357,6 +385,11 @@
 
 		<!-- Game screen -->
 		<div id="screen-game" class="screen">
+			<!-- Countdown overlay shown on top of the camera preview -->
+			<div id="game-countdown-overlay">
+				<span id="game-countdown-number"></span>
+			</div>
+
 			<div class="hud">
 				<div class="hud-block">
 					<p class="hud-label">Waktu</p>
@@ -409,8 +442,11 @@
 			const resultScoreEl = document.getElementById(
 				"result-score",
 			) as HTMLElement;
-			const countdownEl = document.getElementById(
-				"countdown-number",
+			const gameCountdownOverlay = document.getElementById(
+				"game-countdown-overlay",
+			) as HTMLElement;
+			const gameCountdownEl = document.getElementById(
+				"game-countdown-number",
 			) as HTMLElement;
 			const ctx = canvas.getContext("2d")!;
 
@@ -504,6 +540,7 @@
 			let timeLeft = GAME_DURATION;
 			let timerInterval: ReturnType<typeof setInterval> | null = null;
 			let gameActive = false;
+			let scoringActive = false;
 
 			/* ── Tracking ──────────────────────────────────────── */
 			function trackHand(id: string, y: number, now: number) {
@@ -679,6 +716,7 @@
 						const h1down = now - h1.lastDown < DIR_WINDOW_MS;
 						const opposite = (h0up && h1down) || (h0down && h1up);
 						if (
+							scoringActive &&
 							opposite &&
 							now - lastScoreTime > SCORE_COOLDOWN_MS
 						) {
@@ -705,6 +743,7 @@
 			/* ── End game ──────────────────────────────────────── */
 			function endGame() {
 				gameActive = false;
+				scoringActive = false;
 				cancelAnimationFrame(rafId);
 				if (timerInterval) {
 					clearInterval(timerInterval);
@@ -719,10 +758,10 @@
 				showScreen("screen-result");
 			}
 
-			/* ── Start game (called after countdown) ───────────── */
-			async function startGame(stream: MediaStream) {
-				// Reset state
+			/* ── Phase 1: init camera, show game screen, start preview loop ── */
+			async function initGame(stream: MediaStream) {
 				score = 0;
+				scoringActive = false;
 				lastScoreTime = 0;
 				lastVidTime = -1;
 				hands = {};
@@ -744,33 +783,37 @@
 
 				showScreen("screen-game");
 				gameActive = true;
+				rafId = requestAnimationFrame(loop);
+			}
 
+			/* ── Phase 2: start timer + scoring after countdown ─────────── */
+			function beginPlay() {
+				scoringActive = true;
 				timerInterval = setInterval(() => {
 					timeLeft--;
 					timerEl.textContent = String(timeLeft);
 					if (timeLeft <= 10) timerEl.classList.add("urgent");
 					if (timeLeft <= 0) endGame();
 				}, 1000);
-
-				rafId = requestAnimationFrame(loop);
 			}
 
-			/* ── Animated countdown 3 → 2 → 1 ─────────────────── */
+			/* ── Animated countdown 3 → 2 → 1 (overlay on game screen) ── */
 			function runCountdown(): Promise<void> {
-				showScreen("screen-countdown");
+				gameCountdownOverlay.classList.add("visible");
 				return new Promise((resolve) => {
 					const nums = [3, 2, 1];
 					let i = 0;
 					function tick() {
 						if (i >= nums.length) {
+							gameCountdownOverlay.classList.remove("visible");
 							setTimeout(resolve, 150);
 							return;
 						}
-						countdownEl.textContent = String(nums[i]);
+						gameCountdownEl.textContent = String(nums[i]);
 						// Restart CSS animation
-						countdownEl.classList.remove("anim");
-						void countdownEl.offsetWidth;
-						countdownEl.classList.add("anim");
+						gameCountdownEl.classList.remove("anim");
+						void gameCountdownEl.offsetWidth;
+						gameCountdownEl.classList.add("anim");
 						i++;
 						setTimeout(tick, 900);
 					}
@@ -799,12 +842,14 @@
 				.getElementById("btn-start")!
 				.addEventListener("click", async () => {
 					try {
-						// Kick off camera request and countdown in parallel
-						const [stream] = await Promise.all([
-							requestCamera(),
-							runCountdown(),
-						]);
-						await startGame(stream);
+						// 1. Activate camera
+						const stream = await requestCamera();
+						// 2. Set up video + show game screen (no timer yet)
+						await initGame(stream);
+						// 3. Countdown overlay on top of live preview
+						await runCountdown();
+						// 4. Start timer + scoring
+						beginPlay();
 					} catch (err) {
 						statusEl.textContent = `Error: ${(err as Error).message ?? err}`;
 						showScreen("screen-loading");
