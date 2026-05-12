@@ -29,8 +29,19 @@
 				touch-action: none;
 			}
 
+			/* @keyframes scrollBg {
+				from {
+					background-position: 0 0;
+				}
+				to {
+					background-position: 0 -1980px;
+				}
+			} */
+
 			body {
-				background: #0d0d1a;
+				background: #0d0d1a url("/images/loop_bg.png") repeat;
+				background-size: contain;
+				/*animation: scrollBg 8s linear infinite; */
 				color: #fff;
 				font-family: system-ui, sans-serif;
 				height: 100dvh;
@@ -91,25 +102,47 @@
 			}
 
 			.btn-start {
-				background: linear-gradient(135deg, #7c3aed, #c084fc);
-				color: #fff;
+				background: none;
+				border: none;
+				padding: 0;
+				cursor: pointer;
+				position: relative;
+				display: inline-block;
+				width: min(90vw, 720px);
+				max-width: 100%;
+				transition:
+					transform 0.1s,
+					opacity 0.1s;
+			}
+
+			.btn-start-img {
+				display: block;
+				width: 100%;
+				height: auto;
+				pointer-events: none;
+			}
+
+			.btn-start-label {
+				position: absolute;
+				left: 0;
+				right: 0;
+				top: 0;
+				bottom: 0;
+				display: flex;
+				align-items: center;
+				justify-content: center;
 				font-size: clamp(1rem, min(5vw, 5dvh), 1.7rem);
 				font-weight: 700;
 				letter-spacing: 0.15em;
+				color: #1c6f62;
 				text-transform: uppercase;
-				border: none;
-				border-radius: 20px;
-				padding: clamp(10px, 3dvh, 18px) clamp(28px, 8vw, 64px);
-				cursor: pointer;
-				box-shadow: 0 0 48px rgba(192, 132, 252, 0.35);
-				transition:
-					transform 0.1s,
-					box-shadow 0.1s;
+				pointer-events: none;
+				z-index: 2;
 			}
 
 			.btn-start:active {
-				transform: scale(0.96);
-				box-shadow: 0 0 20px rgba(192, 132, 252, 0.15);
+				transform: scale(0.98);
+				opacity: 0.95;
 			}
 
 			.hint-ready {
@@ -298,12 +331,20 @@
 
 		<!-- Ready screen -->
 		<div id="screen-ready" class="screen">
-			<p class="game-title">Six Seven</p>
-			<button id="btn-start" class="btn-start">Start</button>
-			<p class="hint-ready">
+			<!-- <p class="game-title">Six Seven</p> -->
+			<img
+				src="/images/logo.png"
+				alt="Six Seven logo"
+				style="width: 240px; height: auto; margin-bottom: 12px;"
+			/>
+			<button id="btn-start" class="btn-start">
+				<img src="/images/start.png" alt="" class="btn-start-img" />
+				<span class="btn-start-label">START</span>
+			</button>
+			<!-- <p class="hint-ready">
 				Angkat <strong>tangan ↑ naik</strong>, turunkan yang lain
 				<strong>↓ turun</strong> = +1 point
-			</p>
+			</p> -->
 			<p>
 				<strong>v0.0.17</strong>
 			</p>
