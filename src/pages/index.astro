@@ -13,6 +13,10 @@
 		/>
 		<meta name="generator" content={Astro.generator} />
 		<title>Six Seven</title>
+		<script
+			src="https://cdn.jsdelivr.net/gh/guavaisjambu/wislib@v1/dist/wislib.umd.js"
+		></script>
+
 		<style>
 			*,
 			*::before,
@@ -374,7 +378,7 @@
 				<strong>↓ turun</strong> = +1 point
 			</p> -->
 			<p>
-				<strong>v0.0.18</strong>
+				<strong>v0.0.19</strong>
 			</p>
 		</div>
 
@@ -422,6 +426,7 @@
 		></video>
 
 		<script>
+			import wislib from "../lib/wislib.ts";
 			import {
 				PoseLandmarker,
 				FilesetResolver,
@@ -756,6 +761,8 @@
 				}
 				resultScoreEl.textContent = String(score);
 				showScreen("screen-result");
+
+				wislib.sendScore(score, () => {});
 			}
 
 			/* ── Phase 1: init camera, show game screen, start preview loop ── */
@@ -841,31 +848,38 @@
 			document
 				.getElementById("btn-start")!
 				.addEventListener("click", async () => {
-					try {
-						// 1. Activate camera
-						const stream = await requestCamera();
-						// 2. Set up video + show game screen (no timer yet)
-						await initGame(stream);
-						// 3. Countdown overlay on top of live preview
-						await runCountdown();
-						// 4. Start timer + scoring
-						beginPlay();
-					} catch (err) {
-						statusEl.textContent = `Error: ${(err as Error).message ?? err}`;
-						showScreen("screen-loading");
-						console.error(err);
-					}
+					wislib.consumeSession(async () => {
+						try {
+							// 1. Activate camera
+							const stream = await requestCamera();
+							// 2. Set up video + show game screen (no timer yet)
+							await initGame(stream);
+							// 3. Countdown overlay on top of live preview
+							await runCountdown();
+							// 4. Start timer + scoring
+							beginPlay();
+						} catch (err) {
+							statusEl.textContent = `Error: ${(err as Error).message ?? err}`;
+							showScreen("screen-loading");
+							console.error(err);
+						}
+					});
 				});
 
 			/* ── Button: Play Again ────────────────────────────── */
 			document
 				.getElementById("btn-again")!
 				.addEventListener("click", () => {
-					showScreen("screen-ready");
+					wislib.finishSession();
+					// showScreen("screen-ready");
 				});
 
 			/* ── Init: load model only ─────────────────────────── */
 			async function main() {
+				// how to init wislib.initWislb
+				const isProduction = true;
+				wislib.initWislb(isProduction);
+
 				statusEl.textContent = "Loading WASM…";
 				const fs = await FilesetResolver.forVisionTasks(WASM_CDN);
 				statusEl.textContent = "Loading model…";
