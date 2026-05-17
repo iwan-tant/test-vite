@@ -352,6 +352,20 @@
 			.btn-again:active {
 				background: #7c3aed;
 			}
+
+			/* ── Capybara sprite ─────────────────────────────── */
+			.capybara-sprite {
+				position: absolute;
+				bottom: 0;
+				left: 50%;
+				transform: translateX(-50%);
+				height: 50dvh;
+				width: auto;
+				max-width: 100vw;
+				object-fit: contain;
+				object-position: bottom;
+				pointer-events: none;
+			}
 		</style>
 	</head>
 	<body>
@@ -362,22 +376,30 @@
 		</div>
 
 		<!-- Ready screen -->
-		<div id="screen-ready" class="screen">
+		<div
+			id="screen-ready"
+			class="screen"
+			style="justify-content: flex-start; padding-top: clamp(24px, 8dvh, 64px);"
+		>
 			<!-- <p class="game-title">Six Seven</p> -->
 			<img
 				src="/images/logo.png"
 				alt="Six Seven logo"
-				style="width: min(240px, 55vw); max-height: 50dvh; height: auto; object-fit: contain; margin-bottom: 12px;"
+				style="width: min(240px, 55vw); max-height: 30dvh; height: auto; object-fit: contain; margin-bottom: 12px;"
 			/>
 			<button id="btn-start" class="btn-start">
 				<img src="/images/start.png" alt="" class="btn-start-img" />
 				<span class="btn-start-label">START</span>
 			</button>
-			<!-- <p class="hint-ready">
-				Angkat <strong>tangan ↑ naik</strong>, turunkan yang lain
-				<strong>↓ turun</strong> = +1 point
-			</p> -->
-			<p>
+
+			<img
+				id="capybara-sprite"
+				class="capybara-sprite"
+				src="/images/capybara/00.png"
+				alt="capybara"
+			/>
+
+			<p style="position: absolute; bottom: 8px; left: 12px; z-index: 1;">
 				<strong>v0.0.19</strong>
 			</p>
 		</div>
@@ -426,6 +448,20 @@
 		></video>
 
 		<script>
+			/* ── Capybara sprite animation ─────────────────────── */
+			{
+				const sprite = document.getElementById(
+					"capybara-sprite",
+				) as HTMLImageElement;
+				const totalFrames = 29;
+				const fps = 30;
+				let frame = 0;
+				setInterval(() => {
+					frame = (frame + 1) % totalFrames;
+					sprite.src = `/images/capybara/${String(frame).padStart(2, "0")}.png`;
+				}, 1000 / fps);
+			}
+
 			import wislib from "../lib/wislib.ts";
 			import {
 				PoseLandmarker,
